@@ -22,8 +22,8 @@ logger.addHandler(stream_handler)
 
 DYNAMIC_INTERVAL = 60 * 5  # 5 minutes
 DYNAMIC_INTERVAL_VARIATION = 60  # ±1 minute variation
-# DYNAMIC_UIDS = [16801939, 1217754423, 1660392980, 1878154667, 1900141897, 1203217682, 434334701]  # Replace with
-DYNAMIC_UIDS = [16801939]
+DYNAMIC_UIDS = [1217754423, 1660392980, 1878154667, 1900141897, 1203217682, 434334701]  # Replace with
+# DYNAMIC_UIDS = [16801939]
 BOT_TOKEN: str = ""
 CHAT_ID: str = ""
 
@@ -42,10 +42,17 @@ class UserInfo:
             media_group.append(InputMediaPhoto(media=pics[0]["url"], caption=content, parse_mode=ParseMode.MARKDOWN_V2))
             for pic in pics[1:]:
                 media_group.append(InputMediaPhoto(media=pic["url"]))
-            await bot.send_media_group(
-                chat_id=CHAT_ID,
-                media=media_group,
-            )
+            try:
+                await bot.send_media_group(
+                    chat_id=CHAT_ID,
+                    media=media_group,
+                )
+            except TimedOut:
+                await asyncio.sleep(5)
+                await bot.send_media_group(
+                    chat_id=CHAT_ID,
+                    media=media_group,
+                )
         else:
             await bot.send_message(
                 chat_id=CHAT_ID,
@@ -100,6 +107,7 @@ async def check_dynamics_loop():
             if uid not in users:
                 users[uid] = UserInfo(uid)
             await check_dynamics(uid)
+            await asyncio.sleep(3)
         logger.info(f"[动态监控] 本轮检查结束，休眠 {interval} 秒")
         await asyncio.sleep(interval)
 
