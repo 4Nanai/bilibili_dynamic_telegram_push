@@ -1,0 +1,6 @@
+services:
+  app:
+    build: .
+    container_name: dynamic_push
+    volumes:
+      - .:/app
