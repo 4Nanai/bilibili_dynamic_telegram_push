@@ -52,7 +52,8 @@ class UserInfo:
                     chat_id=CHAT_ID,
                     text=major,
                     parse_mode=ParseMode.MARKDOWN_V2,
-                    reply_markup=reply_markup
+                    reply_markup=reply_markup,
+                    disable_web_page_preview=True
                 )
             except TimedOut:
                 await asyncio.sleep(5)
@@ -60,33 +61,90 @@ class UserInfo:
                     chat_id=CHAT_ID,
                     media=media_group,
                 )
+                await bot.send_message(
+                    chat_id=CHAT_ID,
+                    text=major,
+                    parse_mode=ParseMode.MARKDOWN_V2,
+                    reply_markup=reply_markup,
+                    disable_web_page_preview=True
+                )
         else:
             await bot.send_message(
                 chat_id=CHAT_ID,
                 text=major,
                 parse_mode=ParseMode.MARKDOWN_V2,
-                reply_markup=reply_markup
+                reply_markup=reply_markup,
+                disable_web_page_preview=True
             )
 
 users: Dict[int, UserInfo] = {}
 
-def extract_dynamic_content(latest, username: str, uid: int):
-    desc = ""
-    major = ""
-    pics = []
-    if latest["modules"]["module_dynamic"]["desc"] != None:
-        desc = latest["modules"]["module_dynamic"]["desc"].get("text", "")
-    if latest["modules"]["module_dynamic"]["major"] != None:
-        type = latest["modules"]["module_dynamic"]["major"].get("type")
+def extract_dynamic_content(latest, username: str, uid: int, pub_time: str):
+    def extract_major_content(major_data):
+        type = major_data.get("type")
         if type == "MAJOR_TYPE_OPUS":
-            major = latest["modules"]["module_dynamic"]["major"]["opus"]["summary"].get("text", "")
-            pics = latest["modules"]["module_dynamic"]["major"]["opus"].get("pics", [])
+            opus = major_data.get("opus", {})
+            title = opus.get("title", "")
+            rich_text_nodes = opus.get("summary", {}).get("rich_text_nodes", [])
+            major = ""
+            for node in rich_text_nodes:
+                if node.get("type") == "RICH_TEXT_NODE_TYPE_TEXT":
+                    major += node.get("orig_text", "")
+            pics = opus.get("pics", [])
+            if title:
+                content = f"*{title}*\n{major}\n"
+            else:
+                content = f"{major}\n"
+            activity = f"发布了新动态:"
         elif type == "MAJOR_TYPE_ARCHIVE":
-            major = latest["modules"]["module_dynamic"]["major"]["archive"].get("title", "")
-            pics = latest["modules"]["module_dynamic"]["major"]["archive"].get("cover", [])
+            archive_title = major_data.get("archive", {}).get("title", "")
+            pics = major_data.get("archive", {}).get("cover", [])
+            content = f"{archive_title}\n"
+            activity = f"发布了投稿:"
+        else:
+            content = ""
+            activity = ""
+            pics = []
 
-    content = major or desc or "这是一条没有内容的动态"
-    return content, pics
+        return activity, content, pics
+
+    desc = ""
+    pics = []
+
+    if latest["modules"]["module_dynamic"]["desc"] is not None:
+        content_list = latest["modules"]["module_dynamic"]["desc"].get("rich_text_nodes", [])
+        for node in content_list:
+            if node.get("type") == "RICH_TEXT_NODE_TYPE_TEXT":
+                desc += node.get("text", "")
+        if latest.get("orig") is not None:
+            orig_dynamic = latest["orig"]["modules"]["module_dynamic"]
+            if orig_dynamic.get("major") is not None:
+                activity, re_dynamic, pics = extract_major_content(orig_dynamic["major"])
+                desc += f"\n\n—— 原动态 ——\n{re_dynamic}————————\n"
+            elif orig_dynamic.get("desc") is not None:
+                re_content_list = orig_dynamic["desc"].get("rich_text_nodes", [])
+                re_content = ""
+                for node in re_content_list:
+                    if node.get("type") == "RICH_TEXT_NODE_TYPE_TEXT":
+                        re_content += node.get("orig_text", "")
+                desc += f"\n\n—— 原动态 ——\n{re_content}————————\n"
+        content = f"发布了新动态:\n\n{desc}"
+
+    elif latest["modules"]["module_dynamic"]["major"] is not None:
+        activity, text, pics = extract_major_content(latest["modules"]["module_dynamic"]["major"])
+        content = f"{activity}\n\n{text}"
+    else:
+        content = ""
+
+    message = (
+        f"[{escape_markdown(username, version=2)}](https://space.bilibili.com/{uid})\n"
+        f"————————————\n"
+        f"{escape_markdown(content, version=2)}\n"
+        f"————————————\n"
+        f"发布时间: {escape_markdown(pub_time, version=2)}\n"
+        
+    )
+    return message, pics
 
 async def check_dynamics(uid: int):
     u = user.User(uid)
@@ -102,6 +160,7 @@ async def check_dynamics(uid: int):
     if user_info is None:
         return
     if time.time() - pub_ts > DYNAMIC_RECENT_THRESHOLD:
+        logger.info(f"[动态监控] {username}(uid: {uid}) 的最新动态发布时间超过阈值，跳过检查")
         return
     pub_action = latest["modules"]["module_author"]["pub_action"]
     if pub_action == "直播了":
@@ -112,12 +171,9 @@ async def check_dynamics(uid: int):
     if id_str != user_info.latest_id_str:
         user_info.latest_id_str = id_str
         url = f"https://t.bilibili.com/{id_str}"
-        content, pics = extract_dynamic_content(latest, username, uid)
-
-        message = f"[**{username}**](https://space.bilibili.com/{uid}) 发布了新动态: {content}\n时间: {pub_time}\n"
-        logger.info(f"[动态] {username}(uid: {uid}) 有新动态: {message}")
-        escaped_message = escape_markdown(message, version=2)
-        asyncio.create_task(user_info.push_new_dynamic(escaped_message, url, pics))
+        message, pics = extract_dynamic_content(latest, username, uid, pub_time)
+        logger.info(f"{message}")
+        asyncio.create_task(user_info.push_new_dynamic(message, url, pics))
     else:
         logger.info(f"[动态] UID {uid} 无新动态")
 
