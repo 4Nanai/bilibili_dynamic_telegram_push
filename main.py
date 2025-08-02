@@ -40,13 +40,19 @@ class UserInfo:
         
         media_group = []
         if pics:
-            media_group.append(InputMediaPhoto(media=pics[0]["url"], caption=major, parse_mode=ParseMode.MARKDOWN_V2))
+            media_group.append(InputMediaPhoto(media=pics[0]["url"], parse_mode=ParseMode.MARKDOWN_V2))
             for pic in pics[1:]:
                 media_group.append(InputMediaPhoto(media=pic["url"]))
             try:
                 await bot.send_media_group(
                     chat_id=CHAT_ID,
                     media=media_group,
+                )
+                await bot.send_message(
+                    chat_id=CHAT_ID,
+                    text=major,
+                    parse_mode=ParseMode.MARKDOWN_V2,
+                    reply_markup=reply_markup
                 )
             except TimedOut:
                 await asyncio.sleep(5)
@@ -67,18 +73,20 @@ users: Dict[int, UserInfo] = {}
 def extract_dynamic_content(latest, username: str, uid: int):
     desc = ""
     major = ""
-    try:
-        desc = latest["modules"]["module_dynamic"]["desc"]["text"]
-    except Exception:
-        logger.info(f"[动态] {username}(uid: {uid}) 的最新动态没有desc内容, 可能是转发动态")
-    try:
-        major = latest["modules"]["module_dynamic"]["major"]["opus"]["summary"]["text"]
-    except Exception:
-        logger.info(f"[动态] {username}(uid: {uid}) 的最新动态没有major内容, 可能是发布视频")
+    pics = []
+    if latest["modules"]["module_dynamic"]["desc"] != None:
+        desc = latest["modules"]["module_dynamic"]["desc"].get("text", "")
+    if latest["modules"]["module_dynamic"]["major"] != None:
+        type = latest["modules"]["module_dynamic"]["major"].get("type")
+        if type == "MAJOR_TYPE_OPUS":
+            major = latest["modules"]["module_dynamic"]["major"]["opus"]["summary"].get("text", "")
+            pics = latest["modules"]["module_dynamic"]["major"]["opus"].get("pics", [])
+        elif type == "MAJOR_TYPE_ARCHIVE":
+            major = latest["modules"]["module_dynamic"]["major"]["archive"].get("title", "")
+            pics = latest["modules"]["module_dynamic"]["major"]["archive"].get("cover", [])
 
     content = major or desc or "这是一条没有内容的动态"
-    
-    return content
+    return content, pics
 
 async def check_dynamics(uid: int):
     u = user.User(uid)
@@ -99,20 +107,14 @@ async def check_dynamics(uid: int):
     if pub_action == "直播了":
         logger.info(f"[动态] {username}(uid: {uid}) 最新动态是直播动作，跳过检查")
         return
-
-    logger.info(f"[动态] 检查 {username}(uid: {uid}) 的新动态，最新 ID: {id_str}, 发布时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(pub_ts))}")
+    pub_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(pub_ts + 8 * 3600))
+    logger.info(f"[动态] 检查 {username}(uid: {uid}) 的新动态，最新 ID: {id_str}, 发布时间: {pub_time}")
     if id_str != user_info.latest_id_str:
         user_info.latest_id_str = id_str
         url = f"https://t.bilibili.com/{id_str}"
-        content = extract_dynamic_content(latest, username, uid)
+        content, pics = extract_dynamic_content(latest, username, uid)
 
-        pics = []
-        try:
-            pics = latest["modules"]["module_dynamic"]["major"]["opus"]["pics"]
-        except Exception:
-            pics = []
-        
-        message = f"[B站新动态通知] 用户: {username}\n时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(pub_ts))}\n内容: {content}"
+        message = f"[**{username}**](https://space.bilibili.com/{uid}) 发布了新动态: {content}\n时间: {pub_time}\n"
         logger.info(f"[动态] {username}(uid: {uid}) 有新动态: {message}")
         escaped_message = escape_markdown(message, version=2)
         asyncio.create_task(user_info.push_new_dynamic(escaped_message, url, pics))
