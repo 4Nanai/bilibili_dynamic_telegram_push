@@ -158,14 +158,13 @@ async def check_dynamics(uid: int):
     user_info = users.get(uid)
 
     if user_info is None:
-        return
+        return False
     if time.time() - pub_ts > DYNAMIC_RECENT_THRESHOLD:
-        logger.info(f"[动态监控] {username}(uid: {uid}) 的最新动态发布时间超过阈值，跳过检查")
-        return
+        return False
     pub_action = latest["modules"]["module_author"]["pub_action"]
     if pub_action == "直播了":
         logger.info(f"[动态] {username}(uid: {uid}) 最新动态是直播动作，跳过检查")
-        return
+        return False
     pub_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(pub_ts + 8 * 3600))
     logger.info(f"[动态] 检查 {username}(uid: {uid}) 的新动态，最新 ID: {id_str}, 发布时间: {pub_time}")
     if id_str != user_info.latest_id_str:
@@ -174,20 +173,27 @@ async def check_dynamics(uid: int):
         message, pics = extract_dynamic_content(latest, username, uid, pub_time)
         logger.info(f"{message}")
         asyncio.create_task(user_info.push_new_dynamic(message, url, pics))
+        return True
     else:
-        logger.info(f"[动态] UID {uid} 无新动态")
+        return False
 
 async def check_dynamics_loop():
     global users
     while True:
         interval = DYNAMIC_INTERVAL + random.randint(-DYNAMIC_INTERVAL_VARIATION, DYNAMIC_INTERVAL_VARIATION)
         logger.info("[动态监控] 开始新一轮检查")
+        new_dynamic_num = 0
+        start_time = time.time()
         for uid in DYNAMIC_UIDS:
             if uid not in users:
                 users[uid] = UserInfo(uid)
-            await check_dynamics(uid)
+            result = await check_dynamics(uid)
+            if result:
+                new_dynamic_num += 1
             await asyncio.sleep(3)
-        logger.info(f"[动态监控] 本轮检查结束，休眠 {interval} 秒")
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        logger.info(f"[动态监控] 本轮检查结束，耗时 {elapsed_time:.2f} 秒，共有 {new_dynamic_num} 条新动态，休眠 {interval} 秒")
         await asyncio.sleep(interval)
 
 async def main(config: str = "config.yaml"):
