@@ -40,7 +40,7 @@ class UserInfo:
         
         media_group = []
         if pics:
-            media_group.append(InputMediaPhoto(media=pics[0]["url"], parse_mode=ParseMode.MARKDOWN_V2))
+            media_group.append(InputMediaPhoto(media=pics[0]["url"]))
             for pic in pics[1:]:
                 media_group.append(InputMediaPhoto(media=pic["url"]))
             try:
@@ -55,19 +55,16 @@ class UserInfo:
                     reply_markup=reply_markup,
                     disable_web_page_preview=True
                 )
-            except TimedOut:
-                await asyncio.sleep(5)
-                await bot.send_media_group(
-                    chat_id=CHAT_ID,
-                    media=media_group,
-                )
+            except Exception as e:
+                logger.error(f"图片过大, 发送媒体组失败: {e}")
                 await bot.send_message(
                     chat_id=CHAT_ID,
-                    text=major,
+                    text=f"{major}\n动态图片过大, 无法显示, 请点击下方按钮查看动态",
                     parse_mode=ParseMode.MARKDOWN_V2,
                     reply_markup=reply_markup,
                     disable_web_page_preview=True
                 )
+
         else:
             await bot.send_message(
                 chat_id=CHAT_ID,
@@ -171,7 +168,7 @@ async def check_dynamics(uid: int, credential: Credential = None):
         user_info.latest_id_str = id_str
         url = f"https://t.bilibili.com/{id_str}"
         message, pics = extract_dynamic_content(latest, username, uid, pub_time)
-        logger.info(f"{message}")
+        logger.info(f"{message}\nPics: {pics}")
         asyncio.create_task(user_info.push_new_dynamic(message, url, pics))
         return True
     else:
