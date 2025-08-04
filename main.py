@@ -108,7 +108,11 @@ def extract_dynamic_content(latest, username: str, uid: int, pub_time: str):
     desc = ""
     pics = []
 
-    if latest["modules"]["module_dynamic"]["desc"] is not None:
+    if latest["modules"]["module_dynamic"]["major"] is not None:
+        activity, text, pics = extract_major_content(latest["modules"]["module_dynamic"]["major"])
+        content = f"{activity}\n\n{text}"
+
+    elif latest["modules"]["module_dynamic"]["desc"] is not None:
         content_list = latest["modules"]["module_dynamic"]["desc"].get("rich_text_nodes", [])
         for node in content_list:
             if node.get("type") == "RICH_TEXT_NODE_TYPE_TEXT":
@@ -127,9 +131,6 @@ def extract_dynamic_content(latest, username: str, uid: int, pub_time: str):
                 desc += f"\n\n—— 原动态 ——\n{re_content}————————\n"
         content = f"发布了新动态:\n\n{desc}"
 
-    elif latest["modules"]["module_dynamic"]["major"] is not None:
-        activity, text, pics = extract_major_content(latest["modules"]["module_dynamic"]["major"])
-        content = f"{activity}\n\n{text}"
     else:
         content = ""
 
