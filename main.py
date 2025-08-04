@@ -8,7 +8,7 @@ import smtplib
 import yaml
 from typing import Dict
 
-from bilibili_api import user
+from bilibili_api import user, Credential
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Message, InputMediaPhoto
 from telegram.constants import ParseMode
@@ -146,8 +146,8 @@ def extract_dynamic_content(latest, username: str, uid: int, pub_time: str):
     )
     return message, pics
 
-async def check_dynamics(uid: int):
-    u = user.User(uid)
+async def check_dynamics(uid: int, credential: Credential = None):
+    u = user.User(uid, credential=credential)
     offset = ""
     page = await u.get_dynamics_new(offset)
     latest = max(page["items"][:10], key=lambda d: d["modules"]["module_author"]["pub_ts"])
@@ -177,7 +177,7 @@ async def check_dynamics(uid: int):
     else:
         return False
 
-async def check_dynamics_loop():
+async def check_dynamics_loop(credential: Credential = None):
     global users
     while True:
         interval = DYNAMIC_INTERVAL + random.randint(-DYNAMIC_INTERVAL_VARIATION, DYNAMIC_INTERVAL_VARIATION)
@@ -187,7 +187,7 @@ async def check_dynamics_loop():
         for uid in DYNAMIC_UIDS:
             if uid not in users:
                 users[uid] = UserInfo(uid)
-            result = await check_dynamics(uid)
+            result = await check_dynamics(uid, credential)
             if result:
                 new_dynamic_num += 1
             await asyncio.sleep(3)
@@ -209,10 +209,17 @@ async def main(config: str = "config.yaml"):
     DYNAMIC_INTERVAL = c.get("dynamic_interval", 60 * 5)
     DYNAMIC_INTERVAL_VARIATION = c.get("dynamic_interval_variation", 60)
     DYNAMIC_RECENT_THRESHOLD = c.get("dynamic_recent_threshold", 60 * 10)
+    SESSDATA = c.get("SESSDATA", "")
+    BILI_JCT = c.get("bili_jct", "")
+    BUVID3 = c.get("buvid3", "")
+    credential = None
+    if SESSDATA and BILI_JCT and BUVID3:
+        credential = Credential(sessdata=SESSDATA, bili_jct=BILI_JCT, buvid3=BUVID3)
+
     if not BOT_TOKEN or not CHAT_ID:
         logger.error("配置文件缺少必要的字段，请检查 config.yaml")
         return
-    await check_dynamics_loop()
+    await check_dynamics_loop(credential)
 
 if __name__ == "__main__":
     try:
