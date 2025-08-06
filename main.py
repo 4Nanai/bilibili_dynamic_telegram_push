@@ -40,9 +40,9 @@ class UserInfo:
         
         media_group = []
         if pics:
-            media_group.append(InputMediaPhoto(media=pics[0]["url"]))
+            media_group.append(InputMediaPhoto(media=pics[0]))
             for pic in pics[1:]:
-                media_group.append(InputMediaPhoto(media=pic["url"]))
+                media_group.append(InputMediaPhoto(media=pic))
             try:
                 await bot.send_media_group(
                     chat_id=CHAT_ID,
@@ -87,7 +87,7 @@ def extract_dynamic_content(latest, username: str, uid: int, pub_time: str):
             for node in rich_text_nodes:
                 if node.get("type") == "RICH_TEXT_NODE_TYPE_TEXT":
                     major += node.get("orig_text", "")
-            pics = opus.get("pics", [])
+            pics = [pic["url"] for pic in opus.get("pics", []) if "url" in pic]
             if title:
                 content = f"*{title}*\n{major}\n"
             else:
@@ -95,7 +95,7 @@ def extract_dynamic_content(latest, username: str, uid: int, pub_time: str):
             activity = f"发布了新动态:"
         elif type == "MAJOR_TYPE_ARCHIVE":
             archive_title = major_data.get("archive", {}).get("title", "")
-            pics = major_data.get("archive", {}).get("cover", [])
+            pics = [major_data.get("archive", {}).get("cover", "")]
             content = f"{archive_title}\n"
             activity = f"发布了投稿:"
         else:
