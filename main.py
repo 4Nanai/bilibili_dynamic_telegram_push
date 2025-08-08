@@ -87,6 +87,8 @@ def extract_dynamic_content(latest, username: str, uid: int, pub_time: str):
             for node in rich_text_nodes:
                 if node.get("type") == "RICH_TEXT_NODE_TYPE_TEXT":
                     major += node.get("orig_text", "")
+            if not major:
+                major = opus.get("summary", {}).get("text", "")
             pics = [pic["url"] for pic in opus.get("pics", []) if "url" in pic]
             if title:
                 content = f"*{title}*\n{major}\n"
@@ -107,29 +109,42 @@ def extract_dynamic_content(latest, username: str, uid: int, pub_time: str):
 
     desc = ""
     pics = []
+    addition = ""
 
-    if latest["modules"]["module_dynamic"]["major"] is not None:
-        activity, text, pics = extract_major_content(latest["modules"]["module_dynamic"]["major"])
+    module_dynamic = latest.get("modules", {}).get("module_dynamic", {})
+    if module_dynamic.get("major") is not None:
+        activity, text, pics = extract_major_content(module_dynamic["major"])
         content = f"{activity}\n\n{text}"
 
-    elif latest["modules"]["module_dynamic"]["desc"] is not None:
-        content_list = latest["modules"]["module_dynamic"]["desc"].get("rich_text_nodes", [])
+    elif module_dynamic.get("desc") is not None:
+        content_list = module_dynamic["desc"].get("rich_text_nodes", [])
         for node in content_list:
             if node.get("type") == "RICH_TEXT_NODE_TYPE_TEXT":
                 desc += node.get("text", "")
+            if desc == "":
+                desc = module_dynamic["desc"].get("text", "")
         if latest.get("orig") is not None:
             orig_dynamic = latest["orig"]["modules"]["module_dynamic"]
             if orig_dynamic.get("major") is not None:
                 activity, re_dynamic, pics = extract_major_content(orig_dynamic["major"])
                 desc += f"\n\n—— 原动态 ——\n{re_dynamic}————————\n"
             elif orig_dynamic.get("desc") is not None:
-                re_content_list = orig_dynamic["desc"].get("rich_text_nodes", [])
-                re_content = ""
-                for node in re_content_list:
+                content_list = orig_dynamic["desc"].get("rich_text_nodes", [])
+                plain_text = ""
+                for node in content_list:
                     if node.get("type") == "RICH_TEXT_NODE_TYPE_TEXT":
-                        re_content += node.get("orig_text", "")
-                desc += f"\n\n—— 原动态 ——\n{re_content}————————\n"
+                        plain_text += node.get("orig_text", "")
+                if plain_text == "":
+                    plain_text = orig_dynamic.get("desc", {}).get("text", "")
+                desc += f"\n\n—— 原动态 ——\n{plain_text}————————\n"
         content = f"发布了新动态:\n\n{desc}"
+
+    if module_dynamic.get("additional") is not None:
+        additional = module_dynamic.get("additional", {})
+        if additional.get("type") == "ADDITIONAL_TYPE_RESERVE":
+            reserve = additional.get("reserve", {})
+            title = reserve.get("title", "")
+            content += f"\n*{title}*"
 
     else:
         content = ""
@@ -154,6 +169,8 @@ async def check_dynamics(uid: int, credential: Credential = None):
     username = latest["modules"]["module_author"]["name"]
     global users
     user_info = users.get(uid)
+
+    # logger.info(f"Json: {json.dumps(latest, ensure_ascii=False, indent=2)}")
 
     if user_info is None:
         return False
