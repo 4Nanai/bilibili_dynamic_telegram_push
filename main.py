@@ -13,6 +13,7 @@ from bilibili_api import user, Credential
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Message, InputMediaPhoto
 from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger("Bilibili_Dynamic_Push")
 logger.setLevel(logging.INFO)
@@ -104,7 +105,6 @@ def extract_dynamic_content(latest, username: str, uid: int, pub_time: str):
             content = ""
             activity = ""
             pics = []
-
         return activity, content, pics
 
     desc = ""
@@ -145,9 +145,8 @@ def extract_dynamic_content(latest, username: str, uid: int, pub_time: str):
             reserve = additional.get("reserve", {})
             title = reserve.get("title", "")
             content += f"\n*{title}*"
-
     else:
-        content = ""
+        pass
 
     message = (
         f"[{escape_markdown(username, version=2)}](https://space.bilibili.com/{uid})\n"
@@ -180,7 +179,7 @@ async def check_dynamics(uid: int, credential: Credential = None):
     if pub_action == "直播了":
         logger.info(f"[动态] {username}(uid: {uid}) 最新动态是直播动作，跳过检查")
         return False
-    pub_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(pub_ts + 8 * 3600))
+    pub_time = datetime.fromtimestamp(pub_ts, tz=timezone(timedelta(hours=8))).strftime('%Y-%m-%d %H:%M:%S')
     logger.info(f"[动态] 检查 {username}(uid: {uid}) 的新动态，最新 ID: {id_str}, 发布时间: {pub_time}")
     if id_str != user_info.latest_id_str:
         user_info.latest_id_str = id_str
