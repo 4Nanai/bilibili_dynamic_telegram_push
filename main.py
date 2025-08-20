@@ -201,10 +201,14 @@ async def check_dynamics_loop(credential: Credential = None):
         for uid in DYNAMIC_UIDS:
             if uid not in users:
                 users[uid] = UserInfo(uid)
-            result = await check_dynamics(uid, credential)
-            if result:
-                new_dynamic_num += 1
-            await asyncio.sleep(3)
+            try:
+                result = await check_dynamics(uid, credential)
+                if result:
+                    new_dynamic_num += 1
+                await asyncio.sleep(3)
+            except Exception as error:
+                logger.error(f"[动态监控] 检查 {uid} 的动态时发生错误: {error}, 跳过本轮检查")
+                break
         end_time = time.time()
         elapsed_time = end_time - start_time
         logger.info(f"[动态监控] 本轮检查结束，耗时 {elapsed_time:.2f} 秒，共有 {new_dynamic_num} 条新动态，休眠 {interval} 秒")
