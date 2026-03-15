@@ -256,7 +256,15 @@ async def main(config: str = "config.yaml"):
     SESSDATA = c.get("SESSDATA", "")
     BILI_JCT = c.get("bili_jct", "")
     BUVID3 = c.get("buvid3", "")
-    credential = Credential(sessdata=SESSDATA, bili_jct=BILI_JCT, buvid3=BUVID3)
+    BUVID4 = c.get("buvid4", "")
+    DEDEUSERID = c.get("dedeuserid", "")
+    credential = Credential(
+        sessdata=SESSDATA,
+        bili_jct=BILI_JCT,
+        buvid3=BUVID3,
+        buvid4=BUVID4,
+        dedeuserid=DEDEUSERID,
+    )
     if not SESSDATA or not BILI_JCT or not BUVID3:
         logger.error("配置文件中缺少必要的 Cookie 字段，请检查 config.yaml")
         return
